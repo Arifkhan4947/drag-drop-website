@@ -1,44 +1,68 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useReducer } from 'react';
 
 const BuilderContext = createContext();
 
-export const BuilderProvider = ({ children }) => {
-  const [elements, setElements] = useState([]);
-  const [selectedElement, setSelectedElement] = useState(null);
+const initialState = {
+  elements: [],
+  selectedElement: null,
+  isDragging: false
+};
 
-  const addElement = (newElement) => {
-    setElements(prev => [...prev, newElement]);
-  };
+function builderReducer(state, action) {
+  switch (action.type) {
+    case 'ADD_ELEMENT':
+      return {
+        ...state,
+        elements: [...state.elements, action.payload]
+      };
+    
+    case 'UPDATE_ELEMENT':
+      return {
+        ...state,
+        elements: state.elements.map(elem => 
+          elem.id === action.payload.id ? { ...elem, ...action.payload.updates } : elem
+        )
+      };
+    
+    case 'DELETE_ELEMENT':
+      return {
+        ...state,
+        elements: state.elements.filter(elem => elem.id !== action.payload),
+        selectedElement: state.selectedElement?.id === action.payload ? null : state.selectedElement
+      };
+    
+    case 'SELECT_ELEMENT':
+      return {
+        ...state,
+        selectedElement: action.payload
+      };
+    
+    case 'REORDER_ELEMENTS':
+      const { oldIndex, newIndex } = action.payload;
+      const elements = Array.from(state.elements);
+      const [removed] = elements.splice(oldIndex, 1);
+      elements.splice(newIndex, 0, removed);
+      return {
+        ...state,
+        elements
+      };
+    
+    default:
+      return state;
+  }
+}
 
-  const updateElement = (id, updates) => {
-    setElements(prev => 
-      prev.map(elem => 
-        elem.id === id ? { ...elem, ...updates } : elem
-      )
-    );
-  };
-
-  const deleteElement = (id) => {
-    setElements(prev => prev.filter(elem => elem.id !== id));
-  };
-
-  const reorderElements = (startIndex, endIndex) => {
-    setElements(prev => {
-      const result = Array.from(prev);
-      const [removed] = result.splice(startIndex, 1);
-      result.splice(endIndex, 0, removed);
-      return result;
-    });
-  };
+export function BuilderProvider({ children }) {
+  const [state, dispatch] = useReducer(builderReducer, initialState);
 
   const value = {
-    elements,
-    selectedElement,
-    setSelectedElement,
-    addElement,
-    updateElement,
-    deleteElement,
-    reorderElements
+    state,
+    addElement: (element) => dispatch({ type: 'ADD_ELEMENT', payload: element }),
+    updateElement: (id, updates) => dispatch({ type: 'UPDATE_ELEMENT', payload: { id, updates } }),
+    deleteElement: (id) => dispatch({ type: 'DELETE_ELEMENT', payload: id }),
+    selectElement: (element) => dispatch({ type: 'SELECT_ELEMENT', payload: element }),
+    reorderElements: (oldIndex, newIndex) => 
+      dispatch({ type: 'REORDER_ELEMENTS', payload: { oldIndex, newIndex } })
   };
 
   return (
@@ -46,12 +70,12 @@ export const BuilderProvider = ({ children }) => {
       {children}
     </BuilderContext.Provider>
   );
-};
+}
 
 export const useBuilder = () => {
   const context = useContext(BuilderContext);
   if (!context) {
-    throw new Error('useBuilder must be used within a BuilderProvider');
+    throw new Error('useBuilder must be used within BuilderProvider');
   }
   return context;
 }; 
